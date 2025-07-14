@@ -1,0 +1,142 @@
+
+name: Build Flutter App
+on:
+  workflow_dispatch:
+    inputs:
+      app_name:
+        description: "App Name"
+        required: true
+        type: string
+      package_name:
+        description: "Package Name"
+        required: true
+        type: string
+      app_url:
+        description: "Website URL"
+        required: true
+        type: string
+      version:
+        description: "App Version"
+        required: false
+        default: "1.0.0"
+        type: string
+      ai_enabled:
+        description: "Enable AI Chatbot"
+        required: false
+        default: "false"
+        type: string
+      ai_provider:
+        description: "AI Provider"
+        required: false
+        default: "gemini"
+        type: string
+      ai_model:
+        description: "AI Model"
+        required: false
+        default: "gemini-1.5-flash"
+        type: string
+      ai_api_key:
+        description: "AI API Key"
+        required: false
+        default: ""
+        type: string
+      ai_chatbot_name:
+        description: "AI Chatbot Name"
+        required: false
+        default: "Asistente Virtual"
+        type: string
+      ai_system_prompt:
+        description: "AI System Prompt"
+        required: false
+        default: "Eres un asistente útil y amigable."
+        type: string
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    
+    steps:
+      - name: 📋 Checkout repository
+        uses: actions/checkout@v4
+        
+      - name: ☕ Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: "zulu"
+          java-version: "17"
+          
+      - name: 🐦 Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.19.0"
+          channel: "stable"
+          cache: true
+          
+      - name: 🔧 Setup Android SDK
+        run: |
+          echo "🔧 Configurando Android SDK 35..."
+          # Actualizar SDK manager
+          yes | $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager --licenses
+          $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager "platforms;android-35"
+          $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager "build-tools;35.0.0"
+          $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager "ndk;26.1.10909125"
+          echo "✅ Android SDK 35 configurado"
+          
+      - name: 🔍 Flutter doctor
+        run: flutter doctor -v
+        
+      - name: 📁 Verify project structure
+        run: |
+          echo "📂 Verificando estructura del proyecto..."
+          ls -la
+          echo "📂 Contenido de lib/:"
+          ls -la lib/ || echo "❌ Directorio lib/ no encontrado"
+          echo "📂 Contenido de android/:"
+          ls -la android/ || echo "❌ Directorio android/ no encontrado"
+          echo "📄 pubspec.yaml:"
+          cat pubspec.yaml || echo "❌ pubspec.yaml no encontrado"
+        
+      - name: 📦 Get dependencies
+        run: flutter pub get
+        
+      - name: 🎨 Generate launcher icons
+        run: |
+          if [ -f "assets/icon.png" ]; then
+            echo "📱 Generando iconos personalizados con flutter_launcher_icons..."
+            flutter pub run flutter_launcher_icons
+          else
+            echo "ℹ️ No se encontró icono personalizado - usando iconos por defecto"
+          fi
+        continue-on-error: true
+        
+      - name: 🧹 Analyze code
+        run: flutter analyze
+        continue-on-error: true
+        
+      - name: 🏗️ Build APK
+        run: flutter build apk --release --verbose
+        
+      - name: 📱 Build AAB (Android App Bundle)
+        run: flutter build appbundle --release --verbose
+        
+      - name: 📤 Upload APK Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-release-apk
+          path: build/app/outputs/flutter-apk/app-release.apk
+          retention-days: 30
+          
+      - name: 📤 Upload AAB Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-release-aab
+          path: build/app/outputs/bundle/release/app-release.aab
+          retention-days: 30
+          
+      - name: 🎉 Build completed
+        run: |
+          echo "✅ Build completado exitosamente"
+          echo "📱 APK: build/app/outputs/flutter-apk/app-release.apk"
+          echo "📦 AAB: build/app/outputs/bundle/release/app-release.aab"
+          echo "🤖 IA habilitada: ${{ github.event.inputs.ai_enabled }}"
